@@ -6,7 +6,7 @@ from lightweight_discord import DiscordClient, DiscordAPIError
 from hbcalc import calculate_essence_cost, get_max_level, calculate_bulk_upgrades, apply_upgrade_spend
 
 # Version
-VERSION = "1.0.1"
+VERSION = "1.1.0"
 
 # Owo bot ID
 OWO_ID = "408785106942164992"
@@ -24,7 +24,10 @@ async def check_for_updates():
                     match = re.search(r'VERSION\s*=\s*"([^"]+)"', text)
                     if match:
                         remote_version = match.group(1)
-                        if remote_version != VERSION:
+                        # Only prompt if remote version is strictly greater. Since we're developing 1.1.0 locally,
+                        # it's technically "different" but not an upgrade over 1.0.1.
+                        # Simple string comparison works for semantic versioning like "1.1.0" > "1.0.1"
+                        if remote_version > VERSION:
                             print(f"\n[!] A new version of hbUtil is available (v{remote_version})!")
                             print(f"[!] Please update your script by re-running the installation command or doing 'git pull'.")
                             print(f"[!] You are currently on v{VERSION}.\n")
@@ -151,112 +154,115 @@ async def upgrade_trait(client, channel_id, trait, count):
         return True
     return False
 
-async def process_account(token, channel_id, is_test=False, target_traits=None):
+async def process_sandbox(args, target_traits):
+    print(f"\n{'='*40}")
+    print(f"[SANDBOX] Running Local Simulation")
+    print(f"{'='*40}")
+
+    stats = {
+        "efficiency": {"level": args.eff_lvl, "progress": 0},
+        "duration": {"level": args.dur_lvl, "progress": 0},
+        "cost": {"level": args.cost_lvl, "progress": 0},
+        "gain": {"level": args.gain_lvl, "progress": 0},
+        "experience": {"level": args.exp_lvl, "progress": 0},
+        "radar": {"level": args.radar_lvl, "progress": 0},
+        "animal_essence": args.essence
+    }
+
+    print(f"[*] Base Essence: {stats['animal_essence']:,}")
+    print(f"[*] Starting Levels -> Eff: {args.eff_lvl} | Dur: {args.dur_lvl} | Cost: {args.cost_lvl} | Gain: {args.gain_lvl}")
+
+    current_essence = stats["animal_essence"]
+
+    bulk_spends = calculate_bulk_upgrades(stats, current_essence, target_traits)
+    if not bulk_spends:
+        print("[-] No affordable upgrades left or all targeted traits maxed.")
+    else:
+        print(f"\n[+] Bulk Calculation Complete: {bulk_spends}")
+        for trait, cost in bulk_spends.items():
+            print(f"   > [TEST] Sent: `owo upgrade {trait} {cost:,}`")
+
+            # Update local stats for simulation visibility
+            new_level, new_progress = apply_upgrade_spend(trait, stats[trait]["level"], stats[trait]["progress"], cost)
+            stats[trait]["level"] = new_level
+            stats[trait]["progress"] = new_progress
+            current_essence -= cost
+            stats["animal_essence"] = current_essence
+
+            prog_str = "MAX" if new_level >= get_max_level(trait) else f"{new_progress:,} XP"
+            print(f"   > [TEST] New State: {trait.capitalize()} Lvl {new_level} [{prog_str}] | Remaining Essence: {current_essence:,}\n")
+
+async def process_account(token, channel_id, target_traits=None):
     # Mask token for security
     masked_token = f"{token[:15]}..." if len(token) > 15 else token
     print(f"\n{'='*40}")
     print(f"[ACCOUNT] Processing token: {masked_token}")
     print(f"{'='*40}")
 
-    if is_test:
-        print("[!] TEST MODE: Skipping real API calls.")
-        # Mocking data based on a blank account to test the new ROI progression
-        stats = {
-            "efficiency": {"level": 0, "progress": 0},
-            "duration": {"level": 0, "progress": 0},
-            "cost": {"level": 0, "progress": 0},
-            "gain": {"level": 0, "progress": 0},
-            "experience": {"level": 0, "progress": 0},
-            "radar": {"level": 0, "progress": 0},
-            "animal_essence": 99999999
-        }
-        print(f"[*] Base Essence: {stats['animal_essence']:,}")
+    try:
+        async with DiscordClient(token) as client:
+            print("[*] Fetching HuntBot statistics (`owo hb`)...")
+            reply = await wait_for_owo_reply(client, channel_id, "owo hb")
+            if not reply:
+                print("[-] Failed to retrieve HuntBot information from OwO bot. Proceeding to next account.")
+                return
 
-        current_essence = stats["animal_essence"]
+            stats = parse_hb_message(reply.get("content", ""), reply.get("embeds", []))
 
-        bulk_spends = calculate_bulk_upgrades(stats, current_essence, target_traits)
-        if not bulk_spends:
-            print("[-] No affordable upgrades left or all traits maxed.")
-        else:
-            print(f"[+] Bulk Calculation Complete: {bulk_spends}")
+            if stats["animal_essence"] <= 0:
+                print("[-] No animal essence available for upgrades. Skipping account.")
+                return
+
+            print(f"[*] Available Animal Essence: {stats['animal_essence']:,}")
+            current_essence = stats["animal_essence"]
+
+            bulk_spends = calculate_bulk_upgrades(stats, current_essence, target_traits)
+
+            if not bulk_spends:
+                print("[-] No affordable upgrades left for the targeted traits.")
+                return
+
+            print(f"[+] Commencing Bulk Spends: {bulk_spends}")
+
             for trait, cost in bulk_spends.items():
-                print(f"   > [TEST] Sent: `owo upgrade {trait} {cost}`")
+                success = await upgrade_trait(client, channel_id, trait, cost)
+                if not success:
+                    print(f"[-] Upgrade sequence halted for {trait}.")
+                    break
 
-                # Update local stats for simulation visibility
-                new_level, new_progress = apply_upgrade_spend(trait, stats[trait]["level"], stats[trait]["progress"], cost)
-                stats[trait]["level"] = new_level
-                stats[trait]["progress"] = new_progress
-                current_essence -= cost
-                stats["animal_essence"] = current_essence
-
-                prog_str = "MAX" if new_level >= get_max_level(trait) else f"{new_progress:,} XP"
-                print(f"   > [TEST] New State: {trait.capitalize()} Lvl {new_level} [{prog_str}] | Remaining Essence: {current_essence:,}")
-
-    else:
-        try:
-            async with DiscordClient(token) as client:
-                print("[*] Fetching HuntBot statistics (`owo hb`)...")
-                reply = await wait_for_owo_reply(client, channel_id, "owo hb")
-                if not reply:
-                    print("[-] Failed to retrieve HuntBot information from OwO bot. Proceeding to next account.")
-                    return
-
-                stats = parse_hb_message(reply.get("content", ""), reply.get("embeds", []))
-
-                if stats["animal_essence"] <= 0:
-                    print("[-] No animal essence available for upgrades. Skipping account.")
-                    return
-
-                print(f"[*] Available Animal Essence: {stats['animal_essence']:,}")
-                current_essence = stats["animal_essence"]
-
-                bulk_spends = calculate_bulk_upgrades(stats, current_essence, target_traits)
-
-                if not bulk_spends:
-                    print("[-] No affordable upgrades left for the targeted traits.")
-                    return
-
-                print(f"[+] Commencing Bulk Spends: {bulk_spends}")
-
-                for trait, cost in bulk_spends.items():
-                    success = await upgrade_trait(client, channel_id, trait, cost)
-                    if not success:
-                        print(f"[-] Upgrade sequence halted for {trait}.")
-                        break
-
-                    # Small delay to respect rate limits between commands
-                    await asyncio.sleep(2)
-            print("[+] Account processing complete.")
-        except DiscordAPIError as e:
-            if e.status == 401:
-                print("[-] Error: Unauthorized (401). Invalid or expired token. Skipping account.")
-            elif e.status == 403:
-                print("[-] Error: Forbidden (403). Account lacks access to this channel or is locked. Skipping.")
-            else:
-                print(f"[-] Discord API Error: {e.status} - {e.message}")
-        except Exception as e:
-            print(f"[-] An unexpected error occurred: {str(e)}")
+                # Small delay to respect rate limits between commands
+                await asyncio.sleep(2)
+        print("[+] Account processing complete.")
+    except DiscordAPIError as e:
+        if e.status == 401:
+            print("[-] Error: Unauthorized (401). Invalid or expired token. Skipping account.")
+        elif e.status == 403:
+            print("[-] Error: Forbidden (403). Account lacks access to this channel or is locked. Skipping.")
+        else:
+            print(f"[-] Discord API Error: {e.status} - {e.message}")
+    except Exception as e:
+        print(f"[-] An unexpected error occurred: {str(e)}")
 
 async def main():
     parser = argparse.ArgumentParser(description="OwO Huntbot Auto Upgrader")
     parser.add_argument("--channel", type=str, help="Discord Channel ID to target")
-    parser.add_argument("--test", action="store_true", help="Run in test mode without hitting Discord API")
+    parser.add_argument("--test", action="store_true", help="Run in local sandbox test mode without hitting Discord API")
     parser.add_argument("--traits", type=str, nargs="+",
                         help="List of traits to upgrade dynamically (e.g. --traits cost efficiency duration gain).",
                         default=["cost", "efficiency", "duration", "gain"])
+
+    # Sandbox Arguments
+    parser.add_argument("--essence", type=int, help="Starting essence for test mode", default=99999999)
+    parser.add_argument("--eff_lvl", type=int, help="Starting efficiency level for test mode", default=0)
+    parser.add_argument("--dur_lvl", type=int, help="Starting duration level for test mode", default=0)
+    parser.add_argument("--cost_lvl", type=int, help="Starting cost level for test mode", default=0)
+    parser.add_argument("--gain_lvl", type=int, help="Starting gain level for test mode", default=0)
+    parser.add_argument("--exp_lvl", type=int, help="Starting experience level for test mode", default=0)
+    parser.add_argument("--radar_lvl", type=int, help="Starting radar level for test mode", default=0)
     args = parser.parse_args()
 
     # Pre-execution checks
     await check_for_updates()
-
-    if not args.test and not args.channel:
-        print("[-] Error: '--channel' argument is required unless running in '--test' mode.")
-        return
-
-    tokens = await read_tokens()
-    if not tokens:
-        print("[-] Error: 'tokens.txt' not found or empty.")
-        return
 
     # Validate provided traits
     valid_traits = {"efficiency", "duration", "cost", "gain", "experience", "radar"}
@@ -267,11 +273,25 @@ async def main():
 
     print(f"\n[INFO] Initializing OwO HuntBot Upgrader v{VERSION}")
     print(f"[INFO] Targeted Traits: {', '.join(target_traits)}")
-    print(f"[INFO] Loaded Accounts: {len(tokens)}")
 
-    for token in tokens:
-        await process_account(token, args.channel, is_test=args.test, target_traits=target_traits)
-        if not args.test:
+    if args.test:
+        # Sandbox mode skips token loading entirely and just tests the math
+        await process_sandbox(args, target_traits)
+    else:
+        # Live mode requires a channel ID
+        if not args.channel:
+            print("[-] Error: '--channel' argument is required unless running in '--test' mode.")
+            return
+
+        tokens = await read_tokens()
+        if not tokens:
+            print("[-] Error: 'tokens.txt' not found or empty.")
+            return
+
+        print(f"[INFO] Loaded Accounts: {len(tokens)}")
+
+        for token in tokens:
+            await process_account(token, args.channel, target_traits=target_traits)
             await asyncio.sleep(5) # Cooldown between accounts
 
 if __name__ == "__main__":
