@@ -170,7 +170,9 @@ async def process_sandbox(args, target_traits):
     }
 
     print(f"[*] Base Essence: {stats['animal_essence']:,}")
-    print(f"[*] Starting Levels -> Eff: {args.eff_lvl} | Dur: {args.dur_lvl} | Cost: {args.cost_lvl} | Gain: {args.gain_lvl}")
+
+    start_lvls_str = " | ".join([f"{t.capitalize()}: {stats[t]['level']}" for t in target_traits])
+    print(f"[*] Starting Levels -> {start_lvls_str}")
 
     current_essence = stats["animal_essence"]
 
