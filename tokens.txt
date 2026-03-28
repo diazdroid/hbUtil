@@ -1,5 +1,0 @@
-# Add your Discord User Tokens below
-# One token per line
-# Example: MTYxMjM0NTY3ODkw.XxYyZz.1234567890abcdef
-MOCK_TOKEN_1
-MOCK_TOKEN_2

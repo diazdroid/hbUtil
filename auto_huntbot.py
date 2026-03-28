@@ -126,15 +126,15 @@ async def process_account(token, channel_id, is_test=False):
 
     if is_test:
         print("TEST MODE: Skipping real API calls.")
-        # Mocking data based on prompt images
+        # Mocking data based on a blank account to test the new ROI progression
         stats = {
-            "efficiency": {"level": 199, "progress": 50504},
-            "duration": {"level": 200, "progress": 0},
-            "cost": {"level": 5, "progress": 0},
-            "gain": {"level": 141, "progress": 0},
-            "experience": {"level": 21, "progress": 234},
-            "radar": {"level": 1, "progress": 0},
-            "animal_essence": 239185  # Used the second account's essence for testing
+            "efficiency": {"level": 0, "progress": 0},
+            "duration": {"level": 0, "progress": 0},
+            "cost": {"level": 0, "progress": 0},
+            "gain": {"level": 0, "progress": 0},
+            "experience": {"level": 0, "progress": 0},
+            "radar": {"level": 0, "progress": 0},
+            "animal_essence": 15384  # Exact amount the user showed in the prompt to simulate
         }
         print(f"Current Stats: {stats}")
 
