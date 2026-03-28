@@ -1,11 +1,36 @@
 import asyncio
 import re
 import argparse
-from lightweight_discord import DiscordClient
+import aiohttp
+from lightweight_discord import DiscordClient, DiscordAPIError
 from hbcalc import calculate_essence_cost, get_max_level, calculate_bulk_upgrades, apply_upgrade_spend
+
+# Version
+VERSION = "1.0.1"
 
 # Owo bot ID
 OWO_ID = "408785106942164992"
+
+async def check_for_updates():
+    """
+    Checks the diazdroid/hbUtil GitHub repository for a newer version of the script.
+    """
+    url = "https://raw.githubusercontent.com/diazdroid/hbUtil/main/auto_huntbot.py"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=5) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    match = re.search(r'VERSION\s*=\s*"([^"]+)"', text)
+                    if match:
+                        remote_version = match.group(1)
+                        if remote_version != VERSION:
+                            print(f"\n[!] A new version of hbUtil is available (v{remote_version})!")
+                            print(f"[!] Please update your script by re-running the installation command or doing 'git pull'.")
+                            print(f"[!] You are currently on v{VERSION}.\n")
+    except Exception:
+        # Silently fail if there is no internet connection or GitHub is unreachable
+        pass
 
 async def read_tokens(file_path="tokens.txt"):
     try:
@@ -143,7 +168,7 @@ async def process_account(token, channel_id, is_test=False, target_traits=None):
             "gain": {"level": 0, "progress": 0},
             "experience": {"level": 0, "progress": 0},
             "radar": {"level": 0, "progress": 0},
-            "animal_essence": 15384
+            "animal_essence": 99999999
         }
         print(f"[*] Base Essence: {stats['animal_essence']:,}")
 
@@ -168,48 +193,65 @@ async def process_account(token, channel_id, is_test=False, target_traits=None):
                 print(f"   > [TEST] New State: {trait.capitalize()} Lvl {new_level} [{prog_str}] | Remaining Essence: {current_essence:,}")
 
     else:
-        async with DiscordClient(token) as client:
-            print("[*] Fetching HuntBot statistics (`owo hb`)...")
-            reply = await wait_for_owo_reply(client, channel_id, "owo hb")
-            if not reply:
-                print("[-] Failed to retrieve HuntBot information from OwO bot.")
-                return
+        try:
+            async with DiscordClient(token) as client:
+                print("[*] Fetching HuntBot statistics (`owo hb`)...")
+                reply = await wait_for_owo_reply(client, channel_id, "owo hb")
+                if not reply:
+                    print("[-] Failed to retrieve HuntBot information from OwO bot. Proceeding to next account.")
+                    return
 
-            stats = parse_hb_message(reply.get("content", ""), reply.get("embeds", []))
+                stats = parse_hb_message(reply.get("content", ""), reply.get("embeds", []))
 
-            if stats["animal_essence"] <= 0:
-                print("[-] No animal essence available for upgrades. Skipping account.")
-                return
+                if stats["animal_essence"] <= 0:
+                    print("[-] No animal essence available for upgrades. Skipping account.")
+                    return
 
-            print(f"[*] Available Animal Essence: {stats['animal_essence']:,}")
-            current_essence = stats["animal_essence"]
+                print(f"[*] Available Animal Essence: {stats['animal_essence']:,}")
+                current_essence = stats["animal_essence"]
 
-            bulk_spends = calculate_bulk_upgrades(stats, current_essence, target_traits)
+                bulk_spends = calculate_bulk_upgrades(stats, current_essence, target_traits)
 
-            if not bulk_spends:
-                print("[-] No affordable upgrades left for the targeted traits.")
-                return
+                if not bulk_spends:
+                    print("[-] No affordable upgrades left for the targeted traits.")
+                    return
 
-            print(f"[+] Commencing Bulk Spends: {bulk_spends}")
+                print(f"[+] Commencing Bulk Spends: {bulk_spends}")
 
-            for trait, cost in bulk_spends.items():
-                success = await upgrade_trait(client, channel_id, trait, cost)
-                if not success:
-                    print(f"[-] Upgrade sequence halted for {trait}.")
-                    break
+                for trait, cost in bulk_spends.items():
+                    success = await upgrade_trait(client, channel_id, trait, cost)
+                    if not success:
+                        print(f"[-] Upgrade sequence halted for {trait}.")
+                        break
 
-                # Small delay to respect rate limits between commands
-                await asyncio.sleep(2)
-        print("[+] Account processing complete.")
+                    # Small delay to respect rate limits between commands
+                    await asyncio.sleep(2)
+            print("[+] Account processing complete.")
+        except DiscordAPIError as e:
+            if e.status == 401:
+                print("[-] Error: Unauthorized (401). Invalid or expired token. Skipping account.")
+            elif e.status == 403:
+                print("[-] Error: Forbidden (403). Account lacks access to this channel or is locked. Skipping.")
+            else:
+                print(f"[-] Discord API Error: {e.status} - {e.message}")
+        except Exception as e:
+            print(f"[-] An unexpected error occurred: {str(e)}")
 
 async def main():
     parser = argparse.ArgumentParser(description="OwO Huntbot Auto Upgrader")
-    parser.add_argument("--channel", type=str, help="Discord Channel ID to target", required=True)
+    parser.add_argument("--channel", type=str, help="Discord Channel ID to target")
     parser.add_argument("--test", action="store_true", help="Run in test mode without hitting Discord API")
     parser.add_argument("--traits", type=str, nargs="+",
                         help="List of traits to upgrade dynamically (e.g. --traits cost efficiency duration gain).",
                         default=["cost", "efficiency", "duration", "gain"])
     args = parser.parse_args()
+
+    # Pre-execution checks
+    await check_for_updates()
+
+    if not args.test and not args.channel:
+        print("[-] Error: '--channel' argument is required unless running in '--test' mode.")
+        return
 
     tokens = await read_tokens()
     if not tokens:
@@ -223,7 +265,7 @@ async def main():
         print("[-] Error: No valid traits provided in arguments. Exiting.")
         return
 
-    print(f"\n[INFO] Initializing OwO HuntBot Upgrader")
+    print(f"\n[INFO] Initializing OwO HuntBot Upgrader v{VERSION}")
     print(f"[INFO] Targeted Traits: {', '.join(target_traits)}")
     print(f"[INFO] Loaded Accounts: {len(tokens)}")
 
