@@ -1,0 +1,4 @@
+# Add your Discord Account Tokens here, one per line.
+# Make sure to copy this file to tokens.txt and add the real tokens there.
+YOUR_DISCORD_TOKEN_1
+YOUR_DISCORD_TOKEN_2
