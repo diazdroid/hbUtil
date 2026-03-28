@@ -10,42 +10,59 @@ An intelligent, lightweight, and fully automated script to mathematically optimi
 - **Rate-Limit & Slowmode Protection**: Built-in detection for Discord's `429 Too Many Requests` and OwO's `slow down! please wait x seconds` responses. It automatically sleeps and retries.
 - **Multi-Account Support**: Drop as many Discord Tokens as you want into `tokens.txt` and it will securely cycle through all of them.
 
-## ⚙️ Installation
+## For Beginners:
 
-1. **Prerequisites**: Ensure you have Python 3.7+ installed.
-2. **Clone the repository**:
-   ```bash
-   git clone https://github.com/yourusername/hbUtil.git
-   cd hbUtil
-   ```
-3. **Install Dependencies**:
-   This project relies on `aiohttp` for lightweight asynchronous HTTP requests to Discord.
-   ```bash
-   # Windows
-   pip install aiohttp
+### 💻 Windows (One-Click)
 
-   # macOS / Linux
-   pip3 install aiohttp
-   ```
+Open **PowerShell** as an Administrator and paste the following command. It will automatically install Python (if missing), Git (if missing), download the bot to your Desktop, install its dependencies, and run it.
 
-## 🔐 Setup
+```powershell
+irm "https://raw.githubusercontent.com/diazdroid/hbUtil/main/windows-setup.ps1" | iex
+```
 
-1. Copy the example tokens file:
-   ```bash
-   cp tokens.example.txt tokens.txt
-   ```
+Once installed:
+1. Go to your Desktop and open the `hbUtil` folder.
 2. Open `tokens.txt` in a text editor and paste your Discord User Tokens (one token per line).
-   *Note: `tokens.txt` is already added to `.gitignore` to prevent accidental leaks.*
+3. Double click `run.bat` to start the bot.
 
-## 🛠️ Usage
+---
 
-### Basic Usage
-To run the auto-upgrader on all tokens using the default optimal Core Traits (`cost`, `efficiency`, `duration`, `gain`):
+## For Advanced Users:
+
+### 💻 Windows / Linux
 
 ```bash
+# Check Python version (Requires 3.7+):
+python --version
+
+# Clone the repository:
+git clone https://github.com/diazdroid/hbUtil.git
+
+# Enter into the cloned directory:
+cd hbUtil
+
+# Install Python Dependencies:
+pip install -r requirements.txt
+
+# Create your tokens file
+cp tokens.example.txt tokens.txt
+```
+
+*(Edit `tokens.txt` to add your tokens)*
+
+### Start the application:
+
+```bash
+# For Windows users:
+run.bat
+
+# Or manually:
 python auto_huntbot.py --channel 123456789012345678
 ```
-*(Replace `123456789012345678` with the ID of the Discord channel where the OwO bot is present.)*
+
+---
+
+## 🛠️ Advanced CLI Usage
 
 ### Dynamic Trait Selection
 If you want to focus exclusively on specific traits (for example, you want to burn essence on `radar` and `experience`):
