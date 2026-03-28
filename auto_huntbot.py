@@ -110,22 +110,31 @@ async def upgrade_trait(client, channel_id, trait, count):
     """
     Sends the upgrade command.
     """
-    print(f"Upgrading {trait} with {count} essence...")
+    print(f"[*] Upgrading '{trait}' with {count:,} essence...")
     cmd = f"owo upgrade {trait} {count}"
     reply = await wait_for_owo_reply(client, channel_id, cmd)
     if reply:
         if "You do not have enough animal essence" in reply.get("content", ""):
-            print("Failed: Not enough animal essence.")
+            print("[-] Failed: Not enough animal essence.")
             return False
-        print(f"Upgrade successful (or verified): {reply.get('content', '')}")
+        # Extract the success confirmation line
+        lines = reply.get('content', '').split('\n')
+        success_line = lines[0] if lines else "Success"
+        # Clean discord formatting like bolding
+        success_line = success_line.replace('**', '')
+        print(f"[+] {success_line}")
         return True
     return False
 
 async def process_account(token, channel_id, is_test=False, target_traits=None):
-    print(f"\n--- Processing account {token[:15]}... ---")
+    # Mask token for security
+    masked_token = f"{token[:15]}..." if len(token) > 15 else token
+    print(f"\n{'='*40}")
+    print(f"[ACCOUNT] Processing token: {masked_token}")
+    print(f"{'='*40}")
 
     if is_test:
-        print("TEST MODE: Skipping real API calls.")
+        print("[!] TEST MODE: Skipping real API calls.")
         # Mocking data based on a blank account to test the new ROI progression
         stats = {
             "efficiency": {"level": 0, "progress": 0},
@@ -134,19 +143,19 @@ async def process_account(token, channel_id, is_test=False, target_traits=None):
             "gain": {"level": 0, "progress": 0},
             "experience": {"level": 0, "progress": 0},
             "radar": {"level": 0, "progress": 0},
-            "animal_essence": 15384  # Exact amount the user showed in the prompt to simulate
+            "animal_essence": 15384
         }
-        print(f"Current Stats: {stats}")
+        print(f"[*] Base Essence: {stats['animal_essence']:,}")
 
         current_essence = stats["animal_essence"]
 
         bulk_spends = calculate_bulk_upgrades(stats, current_essence, target_traits)
         if not bulk_spends:
-            print("No affordable upgrades left or all traits maxed.")
+            print("[-] No affordable upgrades left or all traits maxed.")
         else:
-            print(f"Calculated Bulk Spends: {bulk_spends}")
+            print(f"[+] Bulk Calculation Complete: {bulk_spends}")
             for trait, cost in bulk_spends.items():
-                print(f"TEST MODE: Would have sent `owo upgrade {trait} {cost}`")
+                print(f"   > [TEST] Sent: `owo upgrade {trait} {cost}`")
 
                 # Update local stats for simulation visibility
                 new_level, new_progress = apply_upgrade_spend(trait, stats[trait]["level"], stats[trait]["progress"], cost)
@@ -154,72 +163,75 @@ async def process_account(token, channel_id, is_test=False, target_traits=None):
                 stats[trait]["progress"] = new_progress
                 current_essence -= cost
                 stats["animal_essence"] = current_essence
-                print(f"New state -> {trait}: Level {new_level} [Progress {new_progress}], Remaining Essence: {current_essence}\n")
+                print(f"   > [TEST] New State: {trait.capitalize()} Lvl {new_level} [{new_progress:,} XP] | Remaining Essence: {current_essence:,}")
 
     else:
         async with DiscordClient(token) as client:
-            print("Fetching HuntBot stats (owo hb)...")
+            print("[*] Fetching HuntBot statistics (`owo hb`)...")
             reply = await wait_for_owo_reply(client, channel_id, "owo hb")
             if not reply:
-                print("Failed to get HuntBot info from OwO bot.")
+                print("[-] Failed to retrieve HuntBot information from OwO bot.")
                 return
 
             stats = parse_hb_message(reply.get("content", ""), reply.get("embeds", []))
 
-            print(f"Current Stats: {stats}")
-
             if stats["animal_essence"] <= 0:
-                print("No animal essence available for upgrades. Exiting account.")
+                print("[-] No animal essence available for upgrades. Skipping account.")
                 return
 
+            print(f"[*] Available Animal Essence: {stats['animal_essence']:,}")
             current_essence = stats["animal_essence"]
 
             bulk_spends = calculate_bulk_upgrades(stats, current_essence, target_traits)
 
             if not bulk_spends:
-                print("No affordable upgrades left or all traits maxed.")
+                print("[-] No affordable upgrades left for the targeted traits.")
                 return
 
-            print(f"Executing Bulk Spends: {bulk_spends}")
+            print(f"[+] Commencing Bulk Spends: {bulk_spends}")
 
             for trait, cost in bulk_spends.items():
-                print(f"Processing Bulk Upgrade: {trait} for {cost} essence")
-
                 success = await upgrade_trait(client, channel_id, trait, cost)
                 if not success:
-                    print(f"Failed to upgrade {trait}. Stopping further upgrades for this account.")
+                    print(f"[-] Upgrade sequence halted for {trait}.")
                     break
 
                 # Small delay to respect rate limits between commands
                 await asyncio.sleep(2)
+        print("[+] Account processing complete.")
 
 async def main():
     parser = argparse.ArgumentParser(description="OwO Huntbot Auto Upgrader")
-    parser.add_argument("--channel", type=str, help="Discord Channel ID to spam OwO commands", required=True)
-    parser.add_argument("--test", action="store_true", help="Run in test mode without hitting API")
+    parser.add_argument("--channel", type=str, help="Discord Channel ID to target", required=True)
+    parser.add_argument("--test", action="store_true", help="Run in test mode without hitting Discord API")
     parser.add_argument("--traits", type=str, nargs="+",
-                        help="List of traits to upgrade dynamically (e.g. --traits cost efficiency duration gain). Defaults to all 4 core traits.",
+                        help="List of traits to upgrade dynamically (e.g. --traits cost efficiency duration gain).",
                         default=["cost", "efficiency", "duration", "gain"])
     args = parser.parse_args()
 
     tokens = await read_tokens()
     if not tokens:
-        print("No tokens found. Please create tokens.txt and add Discord user tokens.")
+        print("[-] Error: 'tokens.txt' not found or empty.")
         return
 
     # Validate provided traits
     valid_traits = {"efficiency", "duration", "cost", "gain", "experience", "radar"}
     target_traits = [t.lower() for t in args.traits if t.lower() in valid_traits]
     if not target_traits:
-        print("Error: No valid traits provided. Exiting.")
+        print("[-] Error: No valid traits provided in arguments. Exiting.")
         return
 
-    print(f"Targeting active traits for progression: {target_traits}")
+    print(f"\n[INFO] Initializing OwO HuntBot Upgrader")
+    print(f"[INFO] Targeted Traits: {', '.join(target_traits)}")
+    print(f"[INFO] Loaded Accounts: {len(tokens)}")
 
     for token in tokens:
         await process_account(token, args.channel, is_test=args.test, target_traits=target_traits)
         if not args.test:
-            await asyncio.sleep(5) # Delay between accounts
+            await asyncio.sleep(5) # Cooldown between accounts
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n[!] Execution interrupted by user.")

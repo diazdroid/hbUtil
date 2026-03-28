@@ -1,59 +1,33 @@
-OwO Bot - Huntbot Analizi ve Yol Haritası
+OwO Bot - HuntBot Mathematical Progression Analysis
 
-1. Mevcut Hesapların Durumu
+1. Core Concept: The "Cheapest Next" ROI Strategy
 
-Hesap 1: 9T's HuntBot
-- Efficiency: Lvl 199
-- Duration: Lvl 200
-- Cost: Lvl 5 [MAX]
-- Gain: Lvl 141
-- Experience: Lvl 21
-- Radar: Lvl 1
-- Animal Essence: 0
+In typical idle-style progression games like OwO's HuntBot, your upgrades (traits) scale in two ways:
+* Linear Benefits: Your animals per hour, essence per hour, and idle duration scale up in roughly flat, predictable increments.
+* Exponential Costs: The Animal Essence required to reach the next level multiplies rapidly.
 
-Hesap 2: WizoX7a9's HuntBot
-- Efficiency: Lvl 215 [MAX]
-- Duration: Lvl 208
-- Cost: Lvl 5 [MAX]
-- Gain: Lvl 157
-- Experience: Lvl 50
-- Radar: Lvl 1
-- Animal Essence: 239,185
+Because the cost of upgrading heavily outpaces the flat benefit you gain per level, the most mathematically optimal approach to maximizing hourly yield is a balanced portfolio. Sinking 400,000 essence into a single level of `Cost` while leaving `Efficiency` at level 1 starves the account of its ability to generate the essence needed to progress.
 
-2. Matematiksel Gelişim Stratejisi (Sıralı Öncelikler)
+To solve this, this automation tool implements a dynamic Return On Investment (ROI) solver:
+Instead of prioritizing one specific trait blindly, the script continuously looks at the exact essence required to unlock the *very next level* of all active traits. It automatically purchases the cheapest one available. It repeats this process until all essence is optimally spent. This ensures all traits grow in tandem, maximizing hourly rates while naturally reaching the thresholds to afford expensive upgrades.
 
-Genel bir simülasyona ve matematiksel verilere dayanarak (Cowoncy masrafları, yakalama süreleri, essence kazanımı vs.), seviye 0'dan MAX seviyeye kadar en iyi sıralama şöyledir:
+2. Trait Roles and Priority
 
-1. Öncelik: Cost (Max Level 5)
-   - Neden? Auto-hunt kullanmak Cowoncy harcatır. İlk başta bu maliyeti düşürmek uzun vadede hayvanlardan kazandığınız Cowoncy'nin kâr olarak kalmasını sağlar. Level 5'e ulaşana kadar sadece buna odaklanın.
+By default, the script groups traits into "Core" (highest ROI) and "Secondary" (ignored unless specified).
 
-2. Öncelik: Efficiency ve Duration (Paralel Gelişim)
-   - Neden? Efficiency (saatte yakalanan hayvan) ve Duration (botun aktif kalma süresi) avınızı doğrudan etkiler. Duration yüksek olursa siz uyurken bile hayvan avlar. Efficiency ise birim zamandaki yakalamayı artırır.
-   - Matematiksel Formül: İkisi de benzer seviyelerde gitmelidir ancak "Essence to Level Up" (bir sonraki seviye için gereken essence) hangisinde daha ucuzsa o basılmalıdır. Örn. Efficiency lvl 100 iken 30k essence istiyorsa, Duration lvl 90 iken 20k istiyorsa Duration'a basılmalıdır. (Tavsiye: Efficiency MAX 215, Duration ise 200+ civarlarına kadar paralel çıkartın)
+CORE TRAITS:
+* Efficiency (Max Lvl 215): Increases animals caught per hour. Highly valuable for raw essence generation through sacrifices.
+* Duration (Max Lvl 235): Increases the maximum AFK limit for the bot. Crucial for generating income while asleep or offline.
+* Gain (Max Lvl 200): Provides flat, raw essence per hour. Acts as an excellent snowball multiplier.
+* Cost (Max Lvl 5): Reduces the Cowoncy cost per run. While the final levels are extremely expensive, the dynamic ROI solver ensures it gets leveled up exactly when your other traits become more expensive than it.
 
-3. Öncelik: Gain (Max Level 200)
-   - Neden? Hayvan yakalama dışında, HuntBot'un ekstra Essence kazandırmasını sağlar. Efficiency ve Duration'ı belli bir seviyeye (örn. Lvl 100+) çıkardıktan sonra veya aralarda Gain'e yatırım yapmak, kartopu etkisini (snowball effect) başlatır.
+SECONDARY TRAITS:
+* Experience (Max Lvl 200): Only increases your global OwO level faster. Does not provide direct economic or essence benefit. Disabled by default, but can be forced via CLI `--traits experience`.
+* Radar (Max Lvl 999): Marginally increases the chance of dropping Bot Animals. Costs hundreds of billions of essence to max out. Strictly an end-game essence sink. Disabled by default.
 
-4. Öncelik: Experience (Max Level 200)
-   - Neden? Sadece seviyenizi (Level) hızlı atlatır. Çok mühim değildir ancak Gain veya Efficiency/Duration yüksek olduğunda ucuz geliyorsa basılabilir. Sonraya saklayın.
+3. Algorithm Flow (Bulk Purchase Simulation)
 
-5. Öncelik: Radar (Max Level 999)
-   - Neden? Sadece Bot Hayvanı düşme ihtimalini arttırır. Fiyatı astronomiktir (Maxlemek için 450 Milyar Essence lazım). Radar'a asla diğerleri bitmeden yatırım yapılmamalıdır.
-
-3. Hesaplara Özel Yol Haritaları
-
-Hesap 1: 9T's HuntBot İçin İzlenecek Yol
-- Durum Analizi: Hesabın "Cost" özelliği çok şükür fulenmiş (Lvl 5 MAX). Yani temel masraflar en aza inmiş. Ayrıca, Efficiency (199) ve Duration (200) seviyeleri oldukça yüksek ama henüz tam MAX değiller. Gain de (141) ortalamanın biraz üzerinde. Şu an hiç Animal Essence (0) bulunmuyor.
-- Adım 1: Sürekli `owo auto hunt` veya hayvan `sacrifice` işlemi ile Animal Essence biriktirin.
-- Adım 2: Toplanan essence'ler ile ilk olarak Efficiency'yi (yakalama oranı) Lvl 215'e (MAX) getirmeye çalışın. Efficiency'i tamamlamak saatteki yakalama oranını maksimum 240/h seviyesine çıkaracaktır. (Mevcut maliyetlerine bakarak Duration ile paralel gidin, Efficiency veya Duration'dan ucuz olanına basın.)
-- Adım 3: Efficiency fulledikten sonra, Duration özelliğini Lvl 235 (MAX) olana kadar basın.
-- Adım 4: Bunlar maxlandıktan sonra, toplanan tüm essence'leri Gain (Lvl 200 MAX) ve ardından Experience (Lvl 200 MAX) özelliklerini fullemeye harcayın.
-- Adım 5: Geriye kalan her şey bittiğinde ve her şey fullediğinde, en son ve sürekli olarak Radar'a yatırım yapın.
-
-Hesap 2: WizoX7a9's HuntBot İçin İzlenecek Yol
-- Durum Analizi: Bu hesapta Efficiency (215) ve Cost (5) zaten MAX seviyede. Duration 208, Gain ise 157. Ayrıca hazırda kullanılabilir 239,185 Animal Essence bulunuyor.
-- Adım 1: Mevcut 239,185 Essence'in tamamını "Duration" özelliğine yatırın (Ucuzsa veya yetiyorsa). Duration'ın da bir an önce Lvl 235 MAX olması gerekiyor (Sürekli botun saatlerce aktif kalması için).
-- Adım 2: Olası kalan essence'ler ile Duration MAX olduktan sonra (veya Duration yükseltmesi için gerekli olan essence çok çok fazlaysa), kalanını tamamen "Gain" yükseltmeye ayırın.
-- Adım 3: Duration'ı tamamen fulledikten sonra (Lvl 235), sıradaki tek odak noktanız Gain'i Lvl 200 (MAX) yapmak olsun. Gain geliştikçe saatlik aldığınız essence miktarı astronomik olarak artacak, bu da bir sonraki yükseltmelerin süresini inanılmaz kısaltacaktır.
-- Adım 4: Gain Lvl 200 olduğunda Experience (Lvl 200) geliştirilmelidir.
-- Adım 5: Tüm traitler bittiğinde kalan sonsuz yatırım Radar'a (Lvl 999) yapılmalıdır.
+To prevent Discord API rate-limiting (spamming 50 essence 30 times in a row):
+1. State Extraction: The script reads the `owo hb` embed to determine the exact level and partial XP (e.g., `[45000/100000]`) of all traits.
+2. Memory Simulation: The script plays out the entire progression loop in RAM, deducting essence from a virtual wallet and adding it to the cheapest virtual traits.
+3. Batch Execution: Once the virtual wallet is empty, it summarizes the required essence per trait and fires a maximum of one command per trait (e.g., `owo upgrade efficiency 45200`).
