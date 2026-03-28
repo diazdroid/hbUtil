@@ -2,6 +2,13 @@ import aiohttp
 import asyncio
 import json
 
+class DiscordAPIError(Exception):
+    """Custom exception for Discord API failures."""
+    def __init__(self, status, message):
+        self.status = status
+        self.message = message
+        super().__init__(f"{status} - {message}")
+
 class DiscordClient:
     def __init__(self, token):
         self.token = token
@@ -33,12 +40,12 @@ class DiscordClient:
                     # Rate limited
                     data = await response.json()
                     retry_after = data.get("retry_after", 1.0)
-                    print(f"Rate limited. Waiting for {retry_after} seconds...")
+                    print(f"[!] Rate limited. Waiting for {retry_after} seconds...")
                     await asyncio.sleep(retry_after)
                 else:
                     text = await response.text()
-                    raise Exception(f"Failed to send message: {response.status} - {text}")
-        raise Exception("Failed to send message after 3 attempts due to rate limits.")
+                    raise DiscordAPIError(response.status, f"Failed to send message: {text}")
+        raise DiscordAPIError(429, "Failed to send message after 3 attempts due to rate limits.")
 
     async def get_messages(self, channel_id, limit=10):
         url = f"{self.base_url}/channels/{channel_id}/messages"
@@ -48,4 +55,4 @@ class DiscordClient:
                 return await response.json()
             else:
                 text = await response.text()
-                raise Exception(f"Failed to get messages: {response.status} - {text}")
+                raise DiscordAPIError(response.status, f"Failed to get messages: {text}")
