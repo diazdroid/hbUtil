@@ -71,12 +71,18 @@ If you want to focus exclusively on specific traits (for example, you want to bu
 python auto_huntbot.py --channel 123456789012345678 --traits radar experience
 ```
 
-### Dry-Run / Test Mode
-If you want to see what decisions the bot *would* make without actually sending any commands or spending any essence, use the `--test` flag. This will simulate a default base-level account:
+### Sandbox / Simulation Mode
+If you want to test the bot's mathematical decisions completely offline (without iterating over your tokens or hitting the API), you can use the `--test` flag. You do not need to provide a channel ID for test mode.
+
+By default, test mode starts with 99,999,999 essence, but you can heavily customize the simulation to replicate your specific account:
 
 ```bash
-python auto_huntbot.py --channel 123456789012345678 --test
+python auto_huntbot.py --test --essence 13000 --eff_lvl 15 --gain_lvl 12
 ```
+
+Available Sandbox arguments:
+- `--essence` (Starting Animal Essence)
+- `--eff_lvl`, `--dur_lvl`, `--cost_lvl`, `--gain_lvl`, `--exp_lvl`, `--radar_lvl` (Starting levels for each trait)
 
 ## 📜 Strategy Documentation
 For a deep dive into the math and strategy behind the bot's upgrade logic, see [analysis.txt](analysis.txt).

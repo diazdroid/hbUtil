@@ -165,6 +165,25 @@ def calculate_bulk_upgrades(current_stats, available_essence, target_traits=None
         else:
             break
 
+    # Dump leftover essence into the absolute cheapest non-maxed core trait (excluding cost, unless it's the only one).
+    # This prevents the bot from sitting on thousands of useless essence when it can't afford a full level yet.
+    if remaining_essence > 0:
+        dump_candidates = {t: calculate_essence_cost(t, stats[t]["level"], stats[t]["level"] + 1, stats[t]["progress"])
+                           for t in target_traits if stats[t]["level"] < get_max_level(t) and t != "cost"}
+        if not dump_candidates:
+            # Fallback to cost if it's the only non-maxed trait
+            if "cost" in target_traits and stats["cost"]["level"] < get_max_level("cost"):
+                dump_candidates = {"cost": calculate_essence_cost("cost", stats["cost"]["level"], stats["cost"]["level"] + 1, stats["cost"]["progress"])}
+
+        if dump_candidates:
+            cheapest_dump_trait = min(dump_candidates, key=dump_candidates.get)
+            spend_plan[cheapest_dump_trait] += remaining_essence
+
+            new_lvl, new_prog = apply_upgrade_spend(cheapest_dump_trait, stats[cheapest_dump_trait]["level"], stats[cheapest_dump_trait]["progress"], remaining_essence)
+            stats[cheapest_dump_trait]["level"] = new_lvl
+            stats[cheapest_dump_trait]["progress"] = new_prog
+            remaining_essence = 0
+
     # Clean up empty spends
     final_plan = {k: v for k, v in spend_plan.items() if v > 0}
     return final_plan

@@ -11,6 +11,8 @@ Because the cost of upgrading heavily outpaces the flat benefit you gain per lev
 To solve this, this automation tool implements a dynamic Return On Investment (ROI) solver:
 Instead of prioritizing one specific trait blindly, the script continuously looks at the exact essence required to unlock the *very next level* of all active traits. It automatically purchases the cheapest one available. It repeats this process until all essence is optimally spent. This ensures all traits grow in tandem, maximizing hourly rates while naturally reaching the thresholds to afford expensive upgrades.
 
+If there is leftover essence at the very end of the calculation that is not enough to afford a full level-up for *any* trait, the script will dump the remainder into the current cheapest active trait. This ensures your essence is always "put to work" towards the cheapest progression goal immediately, rather than sitting idly in the bank.
+
 2. Trait Roles and Priority
 
 By default, the script groups traits into "Core" (highest ROI) and "Secondary" (ignored unless specified).
