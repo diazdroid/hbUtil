@@ -2,7 +2,7 @@ import asyncio
 import re
 import argparse
 from lightweight_discord import DiscordClient
-from hbcalc import calculate_essence_cost, get_max_level, get_optimal_upgrade, apply_upgrade_spend
+from hbcalc import calculate_essence_cost, get_max_level, calculate_bulk_upgrades, apply_upgrade_spend
 
 # Owo bot ID
 OWO_ID = "408785106942164992"
@@ -110,7 +110,7 @@ async def upgrade_trait(client, channel_id, trait, count):
     """
     Sends the upgrade command.
     """
-    print(f"Upgrading {trait} by {count} levels...")
+    print(f"Upgrading {trait} with {count} essence...")
     cmd = f"owo upgrade {trait} {count}"
     reply = await wait_for_owo_reply(client, channel_id, cmd)
     if reply:
@@ -121,7 +121,7 @@ async def upgrade_trait(client, channel_id, trait, count):
         return True
     return False
 
-async def process_account(token, channel_id, is_test=False):
+async def process_account(token, channel_id, is_test=False, target_traits=None):
     print(f"\n--- Processing account {token[:15]}... ---")
 
     if is_test:
@@ -140,24 +140,22 @@ async def process_account(token, channel_id, is_test=False):
 
         current_essence = stats["animal_essence"]
 
-        while current_essence > 0:
-            optimal_trait, cost = get_optimal_upgrade(stats, current_essence)
+        bulk_spends = calculate_bulk_upgrades(stats, current_essence, target_traits)
+        if not bulk_spends:
+            print("No affordable upgrades left or all traits maxed.")
+        else:
+            print(f"Calculated Bulk Spends: {bulk_spends}")
+            for trait, cost in bulk_spends.items():
+                print(f"TEST MODE: Would have sent `owo upgrade {trait} {cost}`")
 
-            if not optimal_trait or cost <= 0:
-                print("No affordable upgrades left or all traits maxed.")
-                break
+                # Update local stats for simulation visibility
+                new_level, new_progress = apply_upgrade_spend(trait, stats[trait]["level"], stats[trait]["progress"], cost)
+                stats[trait]["level"] = new_level
+                stats[trait]["progress"] = new_progress
+                current_essence -= cost
+                stats["animal_essence"] = current_essence
+                print(f"New state -> {trait}: Level {new_level} [Progress {new_progress}], Remaining Essence: {current_essence}\n")
 
-            print(f"Calculated Optimal Upgrade: {optimal_trait} for {cost} essence")
-            print(f"TEST MODE: Would have sent `owo upgrade {optimal_trait} {cost}`")
-
-            # Since we only get the cost back, we simulate the state update locally
-            new_level, new_progress = apply_upgrade_spend(optimal_trait, stats[optimal_trait]["level"], stats[optimal_trait]["progress"], cost)
-            stats[optimal_trait]["level"] = new_level
-            stats[optimal_trait]["progress"] = new_progress
-
-            current_essence -= cost
-            stats["animal_essence"] = current_essence
-            print(f"New state -> {optimal_trait}: Level {new_level} [Progress {new_progress}], Remaining Essence: {current_essence}\n")
     else:
         async with DiscordClient(token) as client:
             print("Fetching HuntBot stats (owo hb)...")
@@ -176,33 +174,32 @@ async def process_account(token, channel_id, is_test=False):
 
             current_essence = stats["animal_essence"]
 
-            while current_essence > 0:
-                optimal_trait, cost = get_optimal_upgrade(stats, current_essence)
+            bulk_spends = calculate_bulk_upgrades(stats, current_essence, target_traits)
 
-                if not optimal_trait or cost <= 0:
-                    print("No affordable upgrades left or all traits maxed.")
+            if not bulk_spends:
+                print("No affordable upgrades left or all traits maxed.")
+                return
+
+            print(f"Executing Bulk Spends: {bulk_spends}")
+
+            for trait, cost in bulk_spends.items():
+                print(f"Processing Bulk Upgrade: {trait} for {cost} essence")
+
+                success = await upgrade_trait(client, channel_id, trait, cost)
+                if not success:
+                    print(f"Failed to upgrade {trait}. Stopping further upgrades for this account.")
                     break
 
-                print(f"Calculated Optimal Upgrade: {optimal_trait} with {cost} essence")
-
-                success = await upgrade_trait(client, channel_id, optimal_trait, cost)
-                if not success:
-                    break # Stop if upgrade failed
-
-                # Update local stats correctly
-                new_level, new_progress = apply_upgrade_spend(optimal_trait, stats[optimal_trait]["level"], stats[optimal_trait]["progress"], cost)
-                stats[optimal_trait]["level"] = new_level
-                stats[optimal_trait]["progress"] = new_progress
-
-                current_essence -= cost
-                stats["animal_essence"] = current_essence
-
-                await asyncio.sleep(2) # Avoid spamming the API
+                # Small delay to respect rate limits between commands
+                await asyncio.sleep(2)
 
 async def main():
     parser = argparse.ArgumentParser(description="OwO Huntbot Auto Upgrader")
-    parser.add_argument("--channel", type=str, help="Discord Channel ID to spam OwO commands", default="1234567890")
+    parser.add_argument("--channel", type=str, help="Discord Channel ID to spam OwO commands", required=True)
     parser.add_argument("--test", action="store_true", help="Run in test mode without hitting API")
+    parser.add_argument("--traits", type=str, nargs="+",
+                        help="List of traits to upgrade dynamically (e.g. --traits cost efficiency duration gain). Defaults to all 4 core traits.",
+                        default=["cost", "efficiency", "duration", "gain"])
     args = parser.parse_args()
 
     tokens = await read_tokens()
@@ -210,8 +207,17 @@ async def main():
         print("No tokens found. Please create tokens.txt and add Discord user tokens.")
         return
 
+    # Validate provided traits
+    valid_traits = {"efficiency", "duration", "cost", "gain", "experience", "radar"}
+    target_traits = [t.lower() for t in args.traits if t.lower() in valid_traits]
+    if not target_traits:
+        print("Error: No valid traits provided. Exiting.")
+        return
+
+    print(f"Targeting active traits for progression: {target_traits}")
+
     for token in tokens:
-        await process_account(token, args.channel, is_test=args.test)
+        await process_account(token, args.channel, is_test=args.test, target_traits=target_traits)
         if not args.test:
             await asyncio.sleep(5) # Delay between accounts
 

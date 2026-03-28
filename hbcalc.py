@@ -80,96 +80,84 @@ def calculate_essence_cost(trait, current_level, target_level, progress=0):
 
     return total_cost
 
-def get_optimal_upgrade(current_stats, available_essence):
+def calculate_bulk_upgrades(current_stats, available_essence, target_traits=None):
     """
-    Returns (trait_name, amount_to_spend) for the optimal upgrade.
-    New Algorithm: ROI Driven.
-    Instead of hard-blocking the entire progression on 'Cost', we find the cheapest upgrade among the
-    core traits (Cost, Efficiency, Duration, and optionally Gain) and upgrade that. This ensures the account
-    always progresses and generates more essence while naturally reaching the thresholds for expensive Cost levels.
+    Simulates the ROI progression in memory to avoid spamming the Discord API.
+    Returns a dictionary of total essence to spend per trait.
+    If target_traits is provided, it ONLY considers and upgrades those traits.
     """
-    # Traits considered for active ROI-based progression (in order of tie-breaker priority)
-    core_traits = ["cost", "efficiency", "duration", "gain"]
+    if target_traits is None:
+        target_traits = ["cost", "efficiency", "duration", "gain"]
 
-    # Calculate the exact cost for the next immediate level of each core trait
-    next_level_costs = {}
-    for trait in core_traits:
-        curr_lvl = current_stats[trait]["level"]
-        max_lvl = get_max_level(trait)
+    import copy
+    stats = copy.deepcopy(current_stats)
+    remaining_essence = available_essence
+    spend_plan = {}
 
-        if curr_lvl < max_lvl:
-            cost = calculate_essence_cost(trait, curr_lvl, curr_lvl + 1, current_stats[trait]["progress"])
-            next_level_costs[trait] = cost
+    for trait in target_traits:
+        spend_plan[trait] = 0
 
-    if not next_level_costs:
-        # If all core traits are maxed, fallback to Experience then Radar
-        for trait in ["experience", "radar"]:
-            curr_lvl = current_stats[trait]["level"]
+    while remaining_essence > 0:
+        next_level_costs = {}
+        for trait in target_traits:
+            curr_lvl = stats[trait]["level"]
             max_lvl = get_max_level(trait)
+
             if curr_lvl < max_lvl:
-                cost = calculate_essence_cost(trait, curr_lvl, curr_lvl + 1, current_stats[trait]["progress"])
-                if cost <= available_essence:
-                    # Calculate how much we can spend in total on this fallback trait
-                    total_spend = 0
-                    first_level_adjusted = False
-                    for level_info in TRAITS_DATA.get(trait, []):
-                        lvl = level_info["level"]
-                        if curr_lvl <= lvl < max_lvl:
-                            c = level_info["essence_to_level_up"]
-                            if not first_level_adjusted:
-                                c -= current_stats[trait]["progress"]
-                                c = max(c, 0)
-                                first_level_adjusted = True
-                            if total_spend + c <= available_essence:
-                                total_spend += c
-                            else:
-                                break
-                    if total_spend > 0:
-                        return trait, total_spend
-        return None, 0
+                cost = calculate_essence_cost(trait, curr_lvl, curr_lvl + 1, stats[trait]["progress"])
+                next_level_costs[trait] = cost
 
-    # Find the cheapest core trait to upgrade next
-    cheapest_trait = min(next_level_costs, key=next_level_costs.get)
-    cheapest_cost = next_level_costs[cheapest_trait]
+        if not next_level_costs:
+            # All strictly targeted traits are maxed out, stop progression.
+            break
 
-    # If we can't afford the absolute cheapest next upgrade, we just wait.
-    if cheapest_cost > available_essence:
-        return None, 0
+        # Find the cheapest trait to upgrade next among the targets
+        cheapest_trait = min(next_level_costs, key=next_level_costs.get)
+        cheapest_cost = next_level_costs[cheapest_trait]
 
-    # If we can afford it, let's buy as many levels of THIS specific trait as we can,
-    # BUT we must stop if the next level of this trait becomes more expensive than
-    # another core trait's current next level. This keeps progression balanced.
+        # If we can't afford the absolute cheapest next upgrade, stop completely.
+        if cheapest_cost > remaining_essence:
+            break
 
-    # Get the cost of the second cheapest trait to act as our "cap" for balanced spending
-    other_costs = [cost for t, cost in next_level_costs.items() if t != cheapest_trait]
-    max_level_cost_cap = min(other_costs) if other_costs else float('inf')
+        # Get the cost of the second cheapest trait to act as our "cap" for balanced spending
+        other_costs = [cost for t, cost in next_level_costs.items() if t != cheapest_trait]
+        max_level_cost_cap = min(other_costs) if other_costs else float('inf')
 
-    total_spend = 0
-    curr_lvl = current_stats[cheapest_trait]["level"]
-    progress = current_stats[cheapest_trait]["progress"]
-    max_lvl = get_max_level(cheapest_trait)
-    first_level_adjusted = False
+        total_spend = 0
+        curr_lvl = stats[cheapest_trait]["level"]
+        progress = stats[cheapest_trait]["progress"]
+        max_lvl = get_max_level(cheapest_trait)
+        first_level_adjusted = False
 
-    for level_info in TRAITS_DATA.get(cheapest_trait, []):
-        lvl = level_info["level"]
-        if curr_lvl <= lvl < max_lvl:
-            cost = level_info["essence_to_level_up"]
+        for level_info in TRAITS_DATA.get(cheapest_trait, []):
+            lvl = level_info["level"]
+            if curr_lvl <= lvl < max_lvl:
+                cost = level_info["essence_to_level_up"]
 
-            if not first_level_adjusted:
-                cost -= progress
-                cost = max(cost, 0)
-                first_level_adjusted = True
-            else:
-                # For subsequent levels, compare the FULL cost of that level to the cap
-                if cost > max_level_cost_cap:
+                if not first_level_adjusted:
+                    cost -= progress
+                    cost = max(cost, 0)
+                    first_level_adjusted = True
+                else:
+                    if cost > max_level_cost_cap:
+                        break
+
+                if total_spend + cost <= remaining_essence:
+                    total_spend += cost
+                else:
                     break
 
-            if total_spend + cost <= available_essence:
-                total_spend += cost
-            else:
-                break
+        if total_spend > 0:
+            spend_plan[cheapest_trait] += total_spend
+            remaining_essence -= total_spend
 
-    if total_spend > 0:
-        return cheapest_trait, total_spend
+            # Simulate the state update in memory
+            new_lvl, new_prog = apply_upgrade_spend(cheapest_trait, stats[cheapest_trait]["level"], stats[cheapest_trait]["progress"], total_spend)
+            stats[cheapest_trait]["level"] = new_lvl
+            stats[cheapest_trait]["progress"] = new_prog
+        else:
+            break
 
-    return None, 0
+    # Clean up empty spends
+    final_plan = {k: v for k, v in spend_plan.items() if v > 0}
+    return final_plan
