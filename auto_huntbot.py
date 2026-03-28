@@ -6,7 +6,7 @@ from lightweight_discord import DiscordClient, DiscordAPIError
 from hbcalc import calculate_essence_cost, get_max_level, calculate_bulk_upgrades, apply_upgrade_spend
 
 # Version
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 # Owo bot ID
 OWO_ID = "408785106942164992"
@@ -170,7 +170,9 @@ async def process_sandbox(args, target_traits):
     }
 
     print(f"[*] Base Essence: {stats['animal_essence']:,}")
-    print(f"[*] Starting Levels -> Eff: {args.eff_lvl} | Dur: {args.dur_lvl} | Cost: {args.cost_lvl} | Gain: {args.gain_lvl}")
+
+    start_lvls_str = " | ".join([f"{t.capitalize()}: {stats[t]['level']}" for t in target_traits])
+    print(f"[*] Starting Levels -> {start_lvls_str}")
 
     current_essence = stats["animal_essence"]
 
