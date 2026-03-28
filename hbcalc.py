@@ -33,6 +33,8 @@ def apply_upgrade_spend(trait, current_level, current_progress, essence_spent):
     Returns (new_level, new_progress).
     """
     trait_data = TRAITS_DATA.get(trait, [])
+    max_lvl = get_max_level(trait)
+
     if not trait_data:
         return current_level, current_progress
 
@@ -41,7 +43,7 @@ def apply_upgrade_spend(trait, current_level, current_progress, essence_spent):
     new_progress = current_progress
 
     for level_info in trait_data:
-        if new_level == level_info["level"]:
+        if new_level == level_info["level"] and new_level < max_lvl:
             cost_to_next = level_info["essence_to_level_up"] - new_progress
             if remaining_spend >= cost_to_next:
                 remaining_spend -= cost_to_next
@@ -51,6 +53,11 @@ def apply_upgrade_spend(trait, current_level, current_progress, essence_spent):
                 new_progress += remaining_spend
                 remaining_spend = 0
                 break
+
+    # Safeguard caps
+    if new_level >= max_lvl:
+        new_level = max_lvl
+        new_progress = 0
 
     return new_level, new_progress
 

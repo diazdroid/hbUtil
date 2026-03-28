@@ -163,7 +163,9 @@ async def process_account(token, channel_id, is_test=False, target_traits=None):
                 stats[trait]["progress"] = new_progress
                 current_essence -= cost
                 stats["animal_essence"] = current_essence
-                print(f"   > [TEST] New State: {trait.capitalize()} Lvl {new_level} [{new_progress:,} XP] | Remaining Essence: {current_essence:,}")
+
+                prog_str = "MAX" if new_level >= get_max_level(trait) else f"{new_progress:,} XP"
+                print(f"   > [TEST] New State: {trait.capitalize()} Lvl {new_level} [{prog_str}] | Remaining Essence: {current_essence:,}")
 
     else:
         async with DiscordClient(token) as client:
