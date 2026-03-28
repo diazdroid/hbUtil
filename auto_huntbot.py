@@ -6,7 +6,7 @@ from lightweight_discord import DiscordClient, DiscordAPIError
 from hbcalc import calculate_essence_cost, get_max_level, calculate_bulk_upgrades, apply_upgrade_spend
 
 # Version
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 # Owo bot ID
 OWO_ID = "408785106942164992"
